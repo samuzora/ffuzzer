@@ -54,7 +54,7 @@ You can CTRL+C anytime during the fuzzing, the fuzzer will output the summary of
 
         for i in range(1, max):
             with context.local(log_level='info'):
-                progress.status(f'{(i-1)/200 * 100}%')
+                progress.status(f'{(i-1)/(max-1) * 100}%')
             p = process(stdin=PTY, stdout=PTY)
             index = -1
             for step in route:
