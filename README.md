@@ -1,6 +1,6 @@
 # ffuzzer
 
-ffuzzer (f'fuzzer') is a fuzzer for format string vulnerabilities, commonly found in CTFs. When trying to exploit a format string leak, I usually waste time scripting a custom fuzzer for that specific challenge. With this fuzzer, I hope to eliminate the repetitive process of fuzzing format string read primitives.
+ffuzzer (`f'fuzzer'`) is a fuzzer for format string vulnerabilities, commonly found in CTFs. When trying to exploit a format string leak, I usually waste time scripting a custom fuzzer for that specific challenge. With this fuzzer, I hope to eliminate the repetitive process of fuzzing format string read primitives.
 
 ## What can it do?
 Currently, the fuzzer can fuzz:
