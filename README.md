@@ -1,14 +1,21 @@
 # ffuzzer
 
-ffuzzer (inspired by f-string `f'fuzzer'`) is a fuzzer for format string vulnerabilities, commonly found in CTFs. When trying to exploit a format string leak, I usually waste time scripting a custom fuzzer for that specific challenge. With this fuzzer, I hope to eliminate the repetitive process of fuzzing format string read primitives.
+ffuzzer (`f'fuzzer'`) is a fuzzer for format string vulnerabilities, commonly found in CTFs. 
+
+When trying to exploit a format string leak, I usually waste time scripting a custom fuzzer for that specific challenge. With this fuzzer, I hope to eliminate the repetitive process of fuzzing format string read primitives.
 
 ## What can it do?
 Currently, the fuzzer can fuzz:
 
 1. Input offset
-2. Canary leaks
-3. PIE leaks
+2. PIE leaks
 4. LIBC base (ASLR) leaks
+4. Canary leaks
+
+### Features:
+* No need to script route to format string vuln
+* Foolproof detection of leak type (input, PIE, LIBC or canary)
+* Colour-coded output to look nice
 
 ## Installation
 ```
@@ -18,6 +25,14 @@ pip install ffuzzer
 ## Usage
 ```
 ffuzzer --help
+```
+
+```
+ffuzzer ./binary
+```
+
+```
+ffuzzer -x 1000 ./binary
 ```
 
 ## Bugs?

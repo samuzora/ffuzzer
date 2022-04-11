@@ -11,22 +11,21 @@ from pwn import *
 def cli(binary, max):
     """Automatic format string fuzzer by samuzora. 
 
-Currently, this fuzzer can fuzz:
+    Currently, this fuzzer can fuzz:
 
-    1. Input offset
+        1. Input offset
 
-    2. Canary leaks
+        2. Canary leaks
 
-    3. PIE leaks
+        3. PIE leaks
 
-    4. LIBC base (ASLR) leaks
+        4. LIBC base (ASLR) leaks
 
-On loading the binary, the fuzzer needs you to tell it how to get to the format string vuln. 
-Input ST%1$pEN where you'd expect the format string leak to be.
-When the program detects a leak, fuzzing will start automatically.
+    On loading the binary, the fuzzer needs you to tell it how to get to the format string vuln. 
+    Input ST%1$pEN where you'd expect the format string leak to be.
+    When the program detects a leak, fuzzing will start automatically.
 
-You can CTRL+C anytime during the fuzzing, the fuzzer will output the summary of the leaks."""
-
+    You can CTRL+C anytime during the fuzzing, the fuzzer will output the summary of the leaks."""
 
     # --- setup ---
     max += 1
@@ -60,7 +59,7 @@ You can CTRL+C anytime during the fuzzing, the fuzzer will output the summary of
             for step in route:
                 index += 1
                 if b'ST%1$pEN' in step:
-                    send_payload(i, step, p, progress)
+                    send_payload(i, step, p)
                 else:
                     p.sendline(step)
                 if index == fmt_index:
@@ -99,9 +98,7 @@ def get_route():
         return route, fmt_index, keyword
 
 # --- send payload ---
-def send_payload(i, step, p, progress):
-    with context.local(log_level='info'):
-        progress.status(f'{(i-1)/200 * 100}%')
+def send_payload(i, step, p):
     payload = step.replace(b'ST%1$pEN', bytes(f'%{i}$p', 'utf-8'))
     p.sendline(payload)
 
@@ -117,7 +114,7 @@ def scan(i, p, keyword, elf, libc, offset, libcs, pies, canaries):
     if offset_check(leak, i):
         click.secho('Offset found', fg='blue')
         offset.append(i)
-    elif len(libcs) < 5:
+    elif len(libcs) < 5 and libc != None:
         if (libc_offset := libc_check(leak, elf, libc_base)) != False: 
             click.secho(f'Possible LIBC leak with offset {hex(libc_offset)} found', fg='green')
             libcs[i] = libc_offset
