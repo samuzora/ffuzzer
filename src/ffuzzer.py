@@ -51,8 +51,6 @@ def cli(binary, max, write):
     try:
         with context.local(log_level='info'):
             progress = log.progress("Fuzzing format strings...")
-        print(keyword)
-        print(route)
 
         for i in range(1, max):
             with context.local(log_level='info'):
@@ -93,7 +91,7 @@ def cli(binary, max, write):
 
 # --- print functions in GOT that can likely be used in overwrite ---
 def print_got(elf, write, i):
-    impt_functions = ['exit', '__stack_chk_fail', 'puts']
+    impt_functions = ['exit', '__stack_chk_fail', 'puts', '__libc_fini_array']
     click.secho("--- suggestions for overwrite ---", fg='green')
     for f in elf.got:
         if f in impt_functions:
@@ -103,6 +101,9 @@ def print_got(elf, write, i):
                 click.secho(f"payload = fmtstr_payload({i}, {{elf.got['{f}']:elf.symbols['{write}']}}) # overwrites {f} to {write}", italic=True)
     click.secho("\n--- full GOT ---", fg='green')
     print(elf.got)
+
+    if not elf.symbols.get(write):
+        click.secho(f"Warning: elf.symbols[{write}] does not exist. You might want to try another function.", fg='yellow')
     
 # --- get route to format string ---
 def get_route():
