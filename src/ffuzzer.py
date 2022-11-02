@@ -51,6 +51,8 @@ def cli(binary, max, write):
     try:
         with context.local(log_level='info'):
             progress = log.progress("Fuzzing format strings...")
+        print(keyword)
+        print(route)
 
         for i in range(1, max):
             with context.local(log_level='info'):
@@ -134,6 +136,8 @@ def get_route():
 # --- send payload ---
 def send_payload(i, step, p):
     payload = step.replace(b'ST%1$pEN', bytes(f'%{i}$p', 'utf-8'))
+    # BUG: these random empty print lines prevent the fuzzer from freezing in some cases. idk what it does, but if it works it works
+    print('', end='')
     p.sendline(payload)
     print('', end='')
 
