@@ -316,7 +316,7 @@ def summary(progress, offset, canaries, pies, libcs, custom_strings):
         click.secho("Possible canaries:")
         for i in canaries:
             click.secho(f"\t%{i}$p", fg="yellow")
-    if custom_strings != []:
+    if custom_strings != {}:
         click.secho("Found custom string at:")
         for i in custom_strings:
             click.secho(
