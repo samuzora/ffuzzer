@@ -1,13 +1,11 @@
 import click
+from pwn import *
 import regex
 from rich import print
-
-from pwn import *
 
 # --- main ---
 @click.command()
 @click.argument("binary", type=click.Path(exists=True))
-# @click.option('-b', '--binary', type=click.Path(exists=True), help='Challenge binary.')
 @click.option(
     "-x",
     "--max",
