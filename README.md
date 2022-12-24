@@ -39,7 +39,7 @@ Currently, the fuzzer can fuzz:
 ``` ffuzzer ./vuln```
 
 You'll need to tell the program how to get to the format string bug and leak. At the input where you expect to have a
-format string bug, input `ST%1$pEN`. You can append anything to the start or end, the program will handle it
+format string bug, input `S%pF`. You can append anything to the start or end, the program will handle it
 accordingly.
 
 Once a leak is detected, the program will trace back your steps to the payload input and begin fuzzing. That's all you
