@@ -93,11 +93,8 @@ def send_payload(i, step, p):
 
 # --- scan output for potential leaks ---
 def identify_leak(
-    i, p, keyword, elf, libc, custom
+    i, p, keyword, elf, custom
 ):
-    if libc != None:
-        libc_base = p.libs()[libc.path]
-
     # recv until start of leak
     p.recvuntil(keyword[0])
 
@@ -113,26 +110,17 @@ def identify_leak(
             "type": "offset",
             "index": i
         }
-    elif libc != None and (libc_offset := checkers.libc_check(leak, elf, libc_base)):
-        return {
-            "type": "libc",
-            "index": i,
-            "libc_offset": libc_offset
-        }
-
     elif elf.pie and (symbol := checkers.pie_check(leak, elf)) != False:
         return {
             "type": "pie",
             "index": i,
             "symbol": symbol
         }
-
     elif elf.canary and checkers.canary_check(leak, elf):
         return {
             "type": "canary",
             "index": i
         }
-
     elif custom and checkers.custom_check(leak, custom):
         return {
             "type": "custom",
@@ -145,17 +133,13 @@ def identify_leak(
 
 
 # --- summarize leaks ---
-def summary(progress, offset, canaries, pies, libcs, custom_strings):
+def summary(progress, offset, canaries, pies, custom_strings):
     with context.local(log_level="info"):
         progress.success("Done!")
     click.secho("\n--- Summary ---", fg="cyan")
     if offset != []:
         click.secho("Offset:")
         click.secho(f"\t%{offset[0]}$p", fg="blue")
-    if libcs != {}:
-        click.secho("Possible LIBC leaks: (libc_base = fmtstr_leak - offset)")
-        for i in libcs:
-            click.secho(f"\t%{i}$p (offset = {hex(libcs[i])})", fg="green")
     if pies != {}:
         click.secho("Possible PIE leaks:")
         for i in pies:

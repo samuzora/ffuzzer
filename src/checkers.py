@@ -24,22 +24,6 @@ def pie_check(leak, elf):
         return False
 
 
-# --- check if leak is possible libc leak ---
-def libc_check(leak, elf, libc_base):
-    if elf.bits == 32:
-        start = "f7"
-    elif elf.bits == 64:
-        start = "7f"
-    try:
-        leak = int(leak.decode(), 16)
-        libc_offset = leak - libc_base
-        assert hex(leak)[2:4] == start and libc_offset >= 0
-    except:
-        return False
-    else:
-        return libc_offset
-
-
 # --- check if leak is possible canary ---
 def canary_check(leak, elf):
     leak = leak.decode()

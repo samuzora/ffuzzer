@@ -39,9 +39,7 @@ def cli(binary, max, write, custom):
 
         3. PIE leaks
 
-        4. LIBC base (ASLR) leaks
-
-        5. Custom strings
+        4. Custom strings
 
     On loading the binary, the fuzzer needs you to tell it how to get to the format string vuln.
     Input S%pF where you'd expect the format string leak to be.
@@ -52,12 +50,10 @@ def cli(binary, max, write, custom):
     # --- setup ---
     max += 1
     elf = context.binary = ELF(binary)
-    libc = elf.libc
     context.log_level = "error"
     offset = []
     canaries = []
     pies = {}
-    libcs = {}
     custom_strings = {}
 
     # --- main ---
@@ -95,7 +91,6 @@ def cli(binary, max, write, custom):
                             p,
                             keyword,
                             elf,
-                            libc,
                             custom,
                         )
 
@@ -103,13 +98,6 @@ def cli(binary, max, write, custom):
                             case "offset":
                                 click.secho("Offset found", fg="blue")
                                 offset.append(i)
-                            case "libc":
-                                if len(libcs) < 20:
-                                    libc_offset = leak_type["libc_offset"]
-                                    click.secho(
-                                        f"Possible LIBC leak with offset {hex(libc_offset)} found", fg="green"
-                                    )
-                                    libcs[i] = libc_offset
                             case "pie":
                                 symbol = leak_type["symbol"]
                                 click.secho(f"Possible PIE leak of {symbol} found", fg="cyan")
@@ -126,8 +114,6 @@ def cli(binary, max, write, custom):
                                     custom_strings[leak.decode()].append(i)
                                 else:
                                     custom_strings[leak.decode()] = [i]
-                            case _:
-                                pass
 
                     else:
                         # we are in partial RELRO mode, just fuzz offset
@@ -150,4 +136,4 @@ def cli(binary, max, write, custom):
             p.close()
     except click.Abort:
         pass
-    util.summary(progress, offset, canaries, pies, libcs, custom_strings)
+    util.summary(progress, offset, canaries, pies, custom_strings)
