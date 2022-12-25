@@ -12,7 +12,7 @@ import util
     "--max",
     type=int,
     help="The maximum number of offsets to fuzz.",
-    default=200,
+    default=100,
     show_default=True,
 )
 @click.option(
@@ -28,7 +28,13 @@ import util
     type=str,
     help="Look for a custom string in the %p leak. If you want to fuzz an ASCII string, please convert it to hexadecimal first.",
 )
-def cli(binary, max, write, custom):
+@click.option(
+    "-r",
+    "--remote",
+    type=(str, int),
+    help="Fuzz on remote instead of locally. Input format: -r HOST PORT"
+)
+def cli(binary, max, write, custom, remote):
     """Automatic format string fuzzer by samuzora.
 
     Currently, this fuzzer can fuzz:
@@ -75,7 +81,12 @@ def cli(binary, max, write, custom):
         for i in range(1, max):
             with context.local(log_level="info"):
                 progress.status(f"{(i-1)/(max-1) * 100}%")
-            p = process(stdin=PTY, stdout=PTY)
+
+            if remote is None:
+                p = process(stdin=PTY, stdout=PTY)
+            else:
+                p = connect(remote[0], remote[1])
+
             index = -1
             for step in route:
                 index += 1

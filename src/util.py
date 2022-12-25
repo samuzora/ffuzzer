@@ -48,7 +48,7 @@ def get_route():
     p = process(stdin=PTY, stdout=PTY)
 
     click.secho("--- binary start ---", fg="cyan")
-    combined_output = bytes.decode(p.clean(), "utf-8")
+    combined_output = p.clean().decode()
 
     # simulate the binary output
     click.echo(combined_output, nl=False)

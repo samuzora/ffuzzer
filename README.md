@@ -37,6 +37,7 @@ payload = b'%7$pAAAA' + p64(elf.got.puts + pie)
 
 * On average, fuzzes extremely quickly (~2 seconds on average)
 * Automatic detection of leak type (input offset, PIE or canary)
+* Fuzzing on remote is now supported!
 
 ## Installation
 
