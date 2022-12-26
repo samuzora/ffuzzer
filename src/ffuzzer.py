@@ -1,7 +1,9 @@
+from concurrent.futures import ThreadPoolExecutor
+from itertools import repeat
+
 import click
 from pwn import *
 
-import checkers
 import util
 
 # --- main ---
@@ -16,13 +18,6 @@ import util
     show_default=True,
 )
 @click.option(
-    "-w",
-    "--write",
-    type=str,
-    help="The name of the function you wish to overwrite something with in the GOT. Enables partial RELRO mode.",
-    default=None,
-)
-@click.option(
     "-c",
     "--custom",
     type=str,
@@ -34,7 +29,15 @@ import util
     type=(str, int),
     help="Fuzz on remote instead of locally. Input format: -r HOST PORT"
 )
-def cli(binary, max, write, custom, remote):
+@click.option(
+    "-t",
+    "--num-threads",
+    type=int,
+    help="Number of threads to use.",
+    default=8,
+    show_default=True
+)
+def cli(binary, max, custom, remote, num_threads):
     """Automatic format string fuzzer by samuzora.
 
     Currently, this fuzzer can fuzz:
@@ -55,12 +58,12 @@ def cli(binary, max, write, custom, remote):
 
     # --- setup ---
     max += 1
-    elf = context.binary = ELF(binary)
-    context.log_level = "error"
     offset = []
     canaries = []
     pies = {}
     custom_strings = {}
+    elf = context.binary = ELF(binary)
+    context.log_level = "error"
 
     # --- main ---
     with context.local(log_level="info"):
@@ -78,73 +81,76 @@ def cli(binary, max, write, custom, remote):
         with context.local(log_level="info"):
             progress = log.progress("Fuzzing format strings...")
 
-        for i in range(1, max):
-            with context.local(log_level="info"):
-                progress.status(f"{(i-1)/(max-1) * 100}%")
+        route_data = {
+            "route": route,
+            "fmt_index": fmt_index,
+            "keyword": keyword
+        }
+        other_data = {
+            "binary": binary,
+            "progress": progress,
+            "max": max,
+            "custom": custom,
+            "remote": remote
+        }
+        with ThreadPoolExecutor(max_workers=num_threads) as executor:
+            current_progress = 0
+            for result in executor.map(fuzz, range(1, max), repeat(route_data), repeat(other_data)):
+                current_progress += 1
+                with context.local(log_level="info"):
+                    progress.status(f"{(current_progress)/(max-1) * 100}%")
 
-            if remote is None:
-                p = process(stdin=PTY, stdout=PTY)
-            else:
-                p = connect(remote[0], remote[1])
-
-            index = -1
-            for step in route:
-                index += 1
-                if b"S%pF" in step:
-                    util.send_payload(i, step, p)
-                else:
-                    p.sendline(step)
-                if index == fmt_index:
-                    if write is None:
-                        # scan leak
-                        leak_type = util.identify_leak(
-                            i,
-                            p,
-                            keyword,
-                            elf,
-                            custom,
-                        )
-
-                        match leak_type["type"]:
-                            case "offset":
-                                click.secho("Offset found", fg="blue")
-                                offset.append(i)
-                            case "pie":
-                                symbol = leak_type["symbol"]
-                                click.secho(f"Possible PIE leak of {symbol} found", fg="cyan")
-                                if pies.get(symbol):
-                                    pies[symbol].append(i)
-                                else:
-                                    pies[symbol] = [i]
-                            case "canary":
-                                click.secho("Possible canary found", fg="yellow")
-                                canaries.append(i)
-                            case "custom":
-                                click.secho(f"Custom string found in {leak.decode()}", fg="magenta")
-                                if custom_strings.get(custom):
-                                    custom_strings[leak.decode()].append(i)
-                                else:
-                                    custom_strings[leak.decode()] = [i]
-
-                    else:
-                        # we are in partial RELRO mode, just fuzz offset
-
-                        # recv until start of leak
-                        p.recvuntil(keyword[0])
-                        if keyword[1] != b"":
-                            # end of leak is not empty
-                            leak = p.recvuntil(keyword[1], drop=True).strip()
+                match result["type"]:
+                    case "offset":
+                        click.secho("Offset found", fg="blue")
+                        offset.append(result["index"])
+                    case "pie":
+                        symbol = result["symbol"]
+                        click.secho(f"Possible PIE leak of {symbol} found", fg="cyan")
+                        if pies.get(symbol):
+                            pies[symbol].append(result["index"])
                         else:
-                            # end of leak is empty, just receive the rest of the input
-                            leak = p.clean().strip()
+                            pies[symbol] = [result["index"]]
+                    case "canary":
+                        click.secho("Possible canary found", fg="yellow")
+                        canaries.append(result["index"])
+                    case "custom":
+                        click.secho(f"Custom string found in {result['leak'].decode()}", fg="magenta")
+                        if custom_strings.get(custom):
+                            custom_strings[result['leak'].decode()].append(result["index"])
+                        else:
+                            custom_strings[result['leak'].decode()] = [result["index"]]
+                
 
-                        # process leak
-                        if checkers.offset_check(leak, i):
-                            click.secho("Offset found", fg="blue")
-                            offset.append(i)
-                            util.print_got(elf, write, i)
-                            raise click.Abort
-            p.close()
-    except click.Abort:
+    except:
         pass
     util.summary(progress, offset, canaries, pies, custom_strings)
+
+def fuzz(i, route_data, other_data):
+    elf = context.binary = ELF(other_data["binary"])
+    context.log_level = "error"
+
+    if other_data["remote"] is None:
+        p = process(stdin=PTY, stdout=PTY)
+    else:
+        p = connect(other_data["remote"][0], other_data["remote"][1])
+
+    index = -1
+    for step in route_data["route"]:
+        index += 1
+        if b"S%pF" in step:
+            util.send_payload(i, step, p)
+        else:
+            p.sendline(step)
+        if index == route_data["fmt_index"]:
+            # scan leak
+            leak_type = util.identify_leak(
+                i,
+                p,
+                route_data["keyword"],
+                elf,
+                other_data["custom"],
+            )
+            return leak_type
+
+    p.close()

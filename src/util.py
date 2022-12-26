@@ -124,6 +124,7 @@ def identify_leak(
     elif custom and checkers.custom_check(leak, custom):
         return {
             "type": "custom",
+            "leak": leak,
             "index": i
         }
 
